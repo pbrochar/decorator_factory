@@ -1,1 +1,1 @@
-# decorqtor_factory
+# decorator_factory
