@@ -1,8 +1,12 @@
 import inspect
 
 from .errors import NoFunctionError
-from .models import (DecoratedFunction, DecoratorArgument, DecoratorArguments,
-                     DecoratorFactory)
+from .models import (
+    DecoratedFunction,
+    DecoratorArgument,
+    DecoratorArguments,
+    DecoratorFactory,
+)
 
 
 def decorator_factory(auto_return: bool = False):
