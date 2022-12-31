@@ -1,4 +1,5 @@
-from decorator_factory import decorator_factory, DecoratorArgument, DecoratedFunction
+from decorator_factory import decorator_factory, DecoratorArgument, DecoratedFunction, DecoratorFolder
+
 from typing import Any
 
 
@@ -6,8 +7,8 @@ from typing import Any
 def repeat(
     func = DecoratedFunction(),
     nb: int = DecoratorArgument(default_value=3, validate_type=True),
-    x: str = DecoratorArgument(default_value=3, validate_type=True)
-
+    x: str = DecoratorArgument(default_value='coucou', validate_type=True),
+    **kwargs
 ):
     """
     Parameters
@@ -20,9 +21,19 @@ def repeat(
     return ret
 
 
-@repeat(nb=3, x='toto')
+@repeat(nb=3, x='toto', test='coucou')
 def print_coucou():
     print('coucou')
 
+
+r = DecoratorFolder()
+r.add(repeat)
+
+
+@r.repeat
+def print_test():
+    print('test')
+
 if __name__ == "__main__":
     print_coucou()
+    print_test()

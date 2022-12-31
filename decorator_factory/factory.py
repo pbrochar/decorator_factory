@@ -1,7 +1,7 @@
 from .models import DecoratorArgument, DecoratedFunction, DecoratorFactory, DecoratorArguments
 import inspect
 from .errors import NoFunctionError
-
+import functools
 
 def decorator_factory(auto_return: bool = False):
 
@@ -25,12 +25,15 @@ def decorator_factory(auto_return: bool = False):
         
         if not decorated:
             raise NoFunctionError(func.__name__)
-       
-        return DecoratorFactory(
+        
+        factory = DecoratorFactory(
             arguments=DecoratorArguments(arguments),
             decorated=decorated,
             decorator=func,
             auto_return=auto_return
-        ).__call__
+        )
+
+        return factory
+
         
     return inner

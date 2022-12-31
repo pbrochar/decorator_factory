@@ -1,7 +1,6 @@
 from functools import wraps, partial
 from typing import Dict, List, Callable, Optional, Any
-from .errors import ConflictNameError
-
+import functools
 
 class DecoratedFunction:
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -29,20 +28,19 @@ class DecoratorArgument:
         default_value: Optional[Any],
         type: Optional[type] = None,
         validate_type: Optional[bool] = False,
-        validator: Optional[Callable] = None
+        validator: Optional[Callable] = None,
     ) -> None:
 
         self.default_value = default_value
         self.validate_type = validate_type
-        self._value = self.default_value
+        self._type = type
+        self._value = None
+
+        self.value = self.default_value
 
         self._arg_name = None
 
-        self._type = type
-
         self.validator = validator
-
-   
 
     @property
     def arg_name(self):
@@ -61,11 +59,12 @@ class DecoratorArgument:
     def type(self, type):
         if not self.type:
             self._type = type
-    
+        self.type_validator()
+
     @property
     def value(self):
         return self._value
-    
+
     @value.setter
     def value(self, value):
         self._value = value
@@ -74,13 +73,12 @@ class DecoratorArgument:
     @staticmethod
     def _is_same_type(type_a, type_b):
         return type_a == type_b or type_a == Any or type_b == Any
-    
+
     def type_validator(self):
         if self.validate_type and self.value and self.type:
             value_type = type(self.value)
             if not self._is_same_type(value_type, self.type):
                 raise TypeError(f"{value_type} != {self.type} for {self.arg_name}")
-
 
 
 class DecoratorArguments:
@@ -89,18 +87,26 @@ class DecoratorArguments:
         self.arg_getter = self._set_getter()
 
     def _set_getter(self):
-        return {arg.arg_name:arg for arg in self.arguments}
+        return {arg.arg_name: arg for arg in self.arguments}
 
-    def _get_args(self):
-        return {arg.arg_name:arg.value for arg in self.arguments}
-    
+    def _get_args(self, **kwargs):
+        if kwargs:
+            arguments = {arg.arg_name: arg.value for arg in self.arguments}
+            arguments.update(kwargs)
+            return arguments
+        else:
+            return {arg.arg_name: arg.value for arg in self.arguments}
+
     def _set_args(self, **kwargs):
         for key, value in kwargs.items():
-            self.arg_getter.get(key).value = value
+            try:
+                self.arg_getter.get(key).value = value
+            except AttributeError:
+                pass
 
     def get_decorated_args(self, **kwargs):
         self._set_args(**kwargs)
-        return self._get_args()
+        return self._get_args(**kwargs)
 
 
 class DecoratorFactory:
@@ -116,6 +122,7 @@ class DecoratorFactory:
         self.decorated = decorated
         self.decorator = decorator
         self.auto_return = auto_return
+        functools.update_wrapper(self, self.decorator)
 
     def __call__(
         self, func: Optional[Callable] = None, *args: Any, **kwargs: Any
@@ -125,8 +132,7 @@ class DecoratorFactory:
             return partial(self.__call__, *args, **kwargs)
         else:
             self.decorated.func = func
-
-        updated_parameters = self.arguments.get_decorated_args(**kwargs)
+        decorator_parameters = self.arguments.get_decorated_args(**kwargs)
 
         @wraps(self.decorated.func)
         def wrapper(*args: Any, **kwargs: Any):
@@ -134,9 +140,24 @@ class DecoratorFactory:
             self.decorated.kwargs = kwargs
 
             if self.auto_return:
-                self.decorator(**updated_parameters)
+                self.decorator(**decorator_parameters)
                 return self.decorated.result
             else:
-                return self.decorator(**updated_parameters)
+                return self.decorator(**decorator_parameters)
 
         return wrapper
+
+
+class DecoratorFolder:
+    def __init__(self, decorators=None) -> None:
+        self.decorators: List = []
+
+    def add(self, decorator):
+        self.decorators.append(decorator)
+        setattr(self, decorator.__name__, decorator)
+
+    def remove(self, removed_decorator):
+        for index, decorator in enumerate(self.decorators):
+            if decorator == removed_decorator:
+                self.decorators.pop(index)
+                delattr(self, decorator.__name__)
