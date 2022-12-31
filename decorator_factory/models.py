@@ -1,123 +1,131 @@
 from functools import wraps, partial
 from typing import Dict, List, Callable, Optional, Any
-import inspect
+from .errors import ConflictNameError
 
 
 class DecoratedFunction:
-
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.args = args
         self.kwargs = kwargs
         self.result = None
         self._func = None
-    
+
     @property
     def func(self):
         return self._func
-    
+
     @func.setter
     def func(self, func):
         self._func = func
-    
+
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        self.result = self.func(*args, *self.args, **kwargs, self.kwargs)
+        self.result = self.func(*args, *self.args, **kwargs, **self.kwargs)
         return self.result
 
 
-
 class DecoratorArgument:
-
     def __init__(
         self,
         default_value: Optional[Any],
-        arg_name: Optional[str] = None,
-        usage_name: Optional[str] = None,
         type: Optional[type] = None,
+        validate_type: Optional[bool] = False,
+        validator: Optional[Callable] = None
     ) -> None:
-        
+
         self.default_value = default_value
-        self.value = self.default_value
+        self.validate_type = validate_type
+        self._value = self.default_value
+
+        self._arg_name = None
 
         self._type = type
-        self._arg_name = arg_name
-        self.usage_name = usage_name
 
-    
+        self.validator = validator
+
+   
+
     @property
     def arg_name(self):
         return self._arg_name
-    
+
     @arg_name.setter
     def arg_name(self, arg_name):
-        if not self.arg_name:
-            self.arg_name = arg_name
-    
+        if not self._arg_name:
+            self._arg_name = arg_name
+
     @property
     def type(self):
         return self._type
-    
+
     @type.setter
     def type(self, type):
         if not self.type:
             self._type = type
+    
+    @property
+    def value(self):
+        return self._value
+    
+    @value.setter
+    def value(self, value):
+        self._value = value
+        self.type_validator()
+
+    @staticmethod
+    def _is_same_type(type_a, type_b):
+        return type_a == type_b or type_a == Any or type_b == Any
+    
+    def type_validator(self):
+        if self.validate_type and self.value and self.type:
+            value_type = type(self.value)
+            if not self._is_same_type(value_type, self.type):
+                raise TypeError(f"{value_type} != {self.type} for {self.arg_name}")
+
 
 
 class DecoratorArguments:
-
     def __init__(self, arguments: List[DecoratorArgument]) -> None:
         self.arguments = arguments
-        self.usual_arguments = self._set_usual_arguments()
-        self.conversion_arguments = self._get_conversion_argument_mapping()
-    
+        self.arg_getter = self._set_getter()
 
-    def _get_conversion_argument_mapping(self) -> Dict[str, str]:
-        return {arg.usage_name or arg.arg_name:arg.arg_name for arg in self.arguments}
+    def _set_getter(self):
+        return {arg.arg_name:arg for arg in self.arguments}
+
+    def _get_args(self):
+        return {arg.arg_name:arg.value for arg in self.arguments}
     
-    
-    def _set_usual_arguments(self) -> Dict[str,Any]:
-        return {arg.arg_name if not arg.usage_name else arg.usage_name:arg.value for arg in self.arguments}
-    
-    
-    def _convert_arguments_names(self) -> Dict[str, Any]:
-        return {self.conversion_arguments.get(key):value for key, value in self.usual_arguments.items()}
-    
-    
-    def _update_usual_arguments(self, **kwargs) -> None:
-        self.usual_arguments.update(kwargs)
-    
+    def _set_args(self, **kwargs):
+        for key, value in kwargs.items():
+            self.arg_getter.get(key).value = value
 
     def get_decorated_args(self, **kwargs):
-        self._update_usual_arguments(**kwargs)
-        return self._convert_arguments_names()
-    
+        self._set_args(**kwargs)
+        return self._get_args()
+
 
 class DecoratorFactory:
-
     def __init__(
-        self, 
-        arguments: DecoratorArguments, 
-        decorated: DecoratedFunction, 
+        self,
+        arguments: DecoratorArguments,
+        decorated: DecoratedFunction,
         decorator: Callable,
-        auto_return: bool
+        auto_return: bool,
     ) -> None:
 
         self.arguments = arguments
         self.decorated = decorated
         self.decorator = decorator
         self.auto_return = auto_return
-    
+
     def __call__(
-        self, 
-        func: Optional[Callable] = None, 
-        *args: Any, 
-        **kwargs: Any
+        self, func: Optional[Callable] = None, *args: Any, **kwargs: Any
     ) -> Any:
 
         if not func:
             return partial(self.__call__, *args, **kwargs)
         else:
             self.decorated.func = func
-        
+
         updated_parameters = self.arguments.get_decorated_args(**kwargs)
 
         @wraps(self.decorated.func)
@@ -130,35 +138,5 @@ class DecoratorFactory:
                 return self.decorated.result
             else:
                 return self.decorator(**updated_parameters)
-        
+
         return wrapper
-
-    
-def decorator_factory(auto_return: bool = False):
-
-    def inner(func):
-        arguments = []
-        decorated = None
-
-        for key, value in inspect.signature(func).parameters.items():
-            if isinstance(value.default, DecoratorArgument):
-                argument = value.default
-
-                if value.annotation == inspect.Signature.empty and not argument.type:
-                    raise ValueError(f"Need type for arg {argument.arg_name}")
-                
-                argument.arg_name = key
-                argument.type = value.annotation
-                arguments.append(argument)
-            
-            elif isinstance(value.default, DecoratedFunction):
-                decorated = value.default
-        
-        return DecoratorFactory(
-            arguments=DecoratorArguments(argument),
-            decorated=decorated,
-            decorator=func,
-            auto_return=auto_return
-        )
-        
-    return inner
