@@ -2,6 +2,8 @@ import functools
 from functools import partial, wraps
 from typing import Any, Callable, Dict, List, Optional
 
+from .errors import ValidationError
+
 
 class DecoratedFunction:
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -34,14 +36,16 @@ class DecoratorArgument:
 
         self.default_value = default_value
         self.validate_type = validate_type
+
+        self._validator = None
+        self.validator = validator
+
         self._type = type
         self._value = None
 
         self.value = self.default_value
 
         self._arg_name = None
-
-        self.validator = validator
 
     @property
     def arg_name(self):
@@ -71,6 +75,14 @@ class DecoratorArgument:
         self._value = value
         self.type_validator()
 
+    @property
+    def validator(self):
+        return self._validator
+
+    @validator.setter
+    def validator(self, value):
+        self._validator = value
+
     @staticmethod
     def _is_same_type(type_a, type_b):
         return type_a == type_b or type_a == Any or type_b == Any
@@ -80,6 +92,10 @@ class DecoratorArgument:
             value_type = type(self.value)
             if not self._is_same_type(value_type, self.type):
                 raise TypeError(f"{value_type} != {self.type} for {self.arg_name}")
+
+    def validate(self):
+        if self.validator and not self.validator(self.value):
+            raise ValidationError(f"Bad value {self.value} for {self.arg_name}")
 
 
 class DecoratorArguments:
@@ -105,9 +121,14 @@ class DecoratorArguments:
             except AttributeError:
                 pass
 
-    def get_decorated_args(self, **kwargs):
+    def get_args(self, **kwargs):
         self._set_args(**kwargs)
+        self.run_validators()
         return self._get_args(**kwargs)
+
+    def run_validators(self):
+        for arg in self.arguments:
+            arg.validate()
 
 
 class DecoratorFactory:
@@ -133,7 +154,8 @@ class DecoratorFactory:
             return partial(self.__call__, *args, **kwargs)
         else:
             self.decorated.func = func
-        decorator_parameters = self.arguments.get_decorated_args(**kwargs)
+
+        decorator_parameters = self.arguments.get_args(**kwargs)
 
         @wraps(self.decorated.func)
         def wrapper(*args: Any, **kwargs: Any):

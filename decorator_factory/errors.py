@@ -7,3 +7,7 @@ class NoFunctionError(Exception):
 class ArgumentValidationError(Exception):
     def __init__(self, message):
         super().__init__(message)
+
+
+class ValidationError(Exception):
+    pass

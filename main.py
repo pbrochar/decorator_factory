@@ -1,17 +1,25 @@
+from typing import Any
+
 from decorator_factory import (
-    decorator_factory,
-    DecoratorArgument,
     DecoratedFunction,
+    DecoratorArgument,
     DecoratorFolder,
+    decorator_factory,
 )
 
-from typing import Any
+
+def int_validator(nb: int):
+    if nb < 10:
+        return False
+    return True
 
 
 @decorator_factory()
 def repeat(
     func=DecoratedFunction(),
-    nb: int = DecoratorArgument(default_value=3, validate_type=True),
+    nb: int = DecoratorArgument(
+        default_value=3, validate_type=True, validator=int_validator
+    ),
     x: str = DecoratorArgument(default_value="coucou", validate_type=True),
     **kwargs
 ):
