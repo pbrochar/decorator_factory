@@ -1,6 +1,7 @@
-from functools import wraps, partial
-from typing import Dict, List, Callable, Optional, Any
 import functools
+from functools import partial, wraps
+from typing import Any, Callable, Dict, List, Optional
+
 
 class DecoratedFunction:
     def __init__(self, *args: Any, **kwargs: Any) -> None:
