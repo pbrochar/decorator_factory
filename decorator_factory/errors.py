@@ -4,10 +4,6 @@ class NoFunctionError(Exception):
         super().__init__(message)
 
 
-class ConflictNameError(Exception):
-    pass
-
-
 class ArgumentValidationError(Exception):
     def __init__(self, message):
         super().__init__(message)
